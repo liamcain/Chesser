@@ -2,8 +2,8 @@ import { ChesserConfig, parse_user_config } from "./ChesserConfig";
 import { ChesserSettings } from "./ChesserSettings";
 
 import { MarkdownPostProcessorContext, Notice } from "obsidian";
-import { Chess, ChessInstance } from 'chess.js';
-import { Chessground }  from 'chessground';
+import { Chess, ChessInstance } from "chess.js";
+import { Chessground } from "chessground";
 import { Api } from "chessground/api";
 import { Color, Key } from "chessground/types";
 
@@ -48,93 +48,95 @@ import "../assets/board-css/purple.css";
 import "../assets/board-css/ic.css";
 
 export function draw_chessboard(settings: ChesserSettings) {
-    return (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
-        let user_config = parse_user_config(settings, source);
-        new Chesser(el, user_config);
-    }
+  return (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+    let user_config = parse_user_config(settings, source);
+    new Chesser(el, user_config);
+  };
 }
 
 export class Chesser {
-    cg: Api;
-    chess: ChessInstance;
+  cg: Api;
+  chess: ChessInstance;
 
-    constructor(el: HTMLElement, user_config: ChesserConfig) {
-        let div = this.set_style(el, user_config.pieceStyle, user_config.boardStyle);
+  constructor(el: HTMLElement, user_config: ChesserConfig) {
+    let div = this.set_style(el, user_config.pieceStyle, user_config.boardStyle);
 
-        if (user_config.fen === "") {
-            this.chess = new Chess();
-        }
-        else {
-            this.chess = new Chess(user_config.fen);
-        }
-
-        const cg_config = {
-            fen: user_config.fen,
-            orientation: user_config.orientation as Color,
-            viewOnly: user_config.viewOnly,
-            drawable: {
-                enabled: user_config.drawable,
-            },
-        };
-
-        try {
-            this.cg = Chessground(div, cg_config);
-        }
-        catch(e) {
-            new Notice("Chesser error: Invalid config");
-            return;
-        }
-
-        // Activates the chess logic
-        if (!user_config.free) {
-            this.cg.set({
-                movable: {
-                    free: false,
-                    dests: this.dests(),
-                    events: {
-                        after: this.refresh_moves(),
-                    }
-                }
-            });
-        }
+    if (user_config.fen === "") {
+      this.chess = new Chess();
+    } else {
+      this.chess = new Chess(user_config.fen);
     }
 
-    set_style(el: HTMLElement, pieceStyle: string, boardStyle: string) {
-        let div = document.createElement("div");
-        el.addClass(pieceStyle);
-        el.addClass(`${boardStyle}-board`)
-        el.appendChild(div);
-        return div;
+    const cg_config = {
+      fen: user_config.fen,
+      orientation: user_config.orientation as Color,
+      viewOnly: user_config.viewOnly,
+      drawable: {
+        enabled: user_config.drawable,
+      },
+    };
+
+    try {
+      this.cg = Chessground(div, cg_config);
+    } catch (e) {
+      new Notice("Chesser error: Invalid config");
+      return;
     }
 
-    color_turn(): Color {
-        return (this.chess.turn() === 'w') ? 'white' : 'black';
+    // Activates the chess logic
+    if (!user_config.free) {
+      this.cg.set({
+        movable: {
+          free: false,
+          dests: this.dests(),
+          events: {
+            after: this.refresh_moves(),
+          },
+        },
+      });
     }
+  }
 
-    dests(): Map<Key, Key[]> {
-        const dests = new Map();
-        this.chess.SQUARES.forEach(s => {
-            const ms = this.chess.moves({square: s, verbose: true});
-            if (ms.length) dests.set(s, ms.map(m => m.to));
-        });
-        return dests;
-    }
+  set_style(el: HTMLElement, pieceStyle: string, boardStyle: string) {
+    let div = document.createElement("div");
+    el.addClass(pieceStyle);
+    el.addClass(`${boardStyle}-board`);
+    el.appendChild(div);
+    return div;
+  }
 
-    check(): boolean {
-        return this.chess.in_check();
-    }
+  color_turn(): Color {
+    return this.chess.turn() === "w" ? "white" : "black";
+  }
 
-    refresh_moves() {
-        return (orig: any, dest: any) => {
-            this.chess.move({from: orig, to: dest});
-            this.cg.set({
-                check: this.check(),
-                turnColor: this.color_turn(),
-                movable: {
-                    color: this.color_turn(),
-                    dests: this.dests(),
-                }
-            });
-        }
-    }
+  dests(): Map<Key, Key[]> {
+    const dests = new Map();
+    this.chess.SQUARES.forEach((s) => {
+      const ms = this.chess.moves({ square: s, verbose: true });
+      if (ms.length)
+        dests.set(
+          s,
+          ms.map((m) => m.to)
+        );
+    });
+    return dests;
+  }
+
+  check(): boolean {
+    return this.chess.in_check();
+  }
+
+  refresh_moves() {
+    return (orig: any, dest: any) => {
+      this.chess.move({ from: orig, to: dest });
+      this.cg.set({
+        check: this.check(),
+        turnColor: this.color_turn(),
+        movable: {
+          color: this.color_turn(),
+          dests: this.dests(),
+        },
+      });
+    };
+  }
 }
