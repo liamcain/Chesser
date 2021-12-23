@@ -88,7 +88,7 @@ export class ChesserSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("View Only")
+      .setName("View-only")
       .setDesc("If enabled, displays a static chess board (no moves, annotations, ...).")
       .addToggle((toggle) => {
         toggle.setValue(this.plugin.settings.viewOnly).onChange((viewOnly) => {

@@ -1,7 +1,16 @@
 import { ChesserConfig, parse_user_config } from "./ChesserConfig";
 import { ChesserSettings } from "./ChesserSettings";
 
-import { MarkdownPostProcessorContext, Notice } from "obsidian";
+import {
+  App,
+  EditorPosition,
+  MarkdownPostProcessorContext,
+  MarkdownRenderChild,
+  MarkdownView,
+  Notice,
+  parseYaml,
+  stringifyYaml,
+} from "obsidian";
 import { Chess, ChessInstance } from "chess.js";
 import { Chessground } from "chessground";
 import { Api } from "chessground/api";
@@ -46,33 +55,54 @@ import "../assets/board-css/blue.css";
 import "../assets/board-css/green.css";
 import "../assets/board-css/purple.css";
 import "../assets/board-css/ic.css";
+import { DrawShape } from "chessground/draw";
 
-export function draw_chessboard(settings: ChesserSettings) {
+export function draw_chessboard(app: App, settings: ChesserSettings) {
   return (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
     let user_config = parse_user_config(settings, source);
-    new Chesser(el, user_config);
+    ctx.addChild(new Chesser(el, ctx, user_config, app));
   };
 }
 
-export class Chesser {
-  cg: Api;
-  chess: ChessInstance;
+export class Chesser extends MarkdownRenderChild {
+  private ctx: MarkdownPostProcessorContext;
+  private app: App;
 
-  constructor(el: HTMLElement, user_config: ChesserConfig) {
-    let div = this.set_style(el, user_config.pieceStyle, user_config.boardStyle);
+  private cg: Api;
+  private chess: ChessInstance;
 
-    if (user_config.fen === "") {
-      this.chess = new Chess();
-    } else {
-      this.chess = new Chess(user_config.fen);
+  constructor(
+    containerEl: HTMLElement,
+    ctx: MarkdownPostProcessorContext,
+    user_config: ChesserConfig,
+    app: App
+  ) {
+    super(containerEl);
+
+    this.app = app;
+    this.ctx = ctx;
+    this.refresh_moves = this.refresh_moves.bind(this);
+    this.save_move = this.save_move.bind(this);
+    this.save_shapes = this.save_shapes.bind(this);
+
+    let div = this.set_style(containerEl, user_config.pieceStyle, user_config.boardStyle);
+
+    this.chess = new Chess();
+
+    if (user_config.pgn) {
+      this.chess.load_pgn(user_config.pgn, { sloppy: true });
+    } else if (user_config.fen) {
+      this.chess.load(user_config.fen);
     }
 
     const cg_config = {
-      fen: user_config.fen,
+      fen: this.chess.fen(),
+      pgn: user_config.pgn,
       orientation: user_config.orientation as Color,
       viewOnly: user_config.viewOnly,
       drawable: {
         enabled: user_config.drawable,
+        onChange: this.save_shapes,
       },
     };
 
@@ -84,16 +114,29 @@ export class Chesser {
     }
 
     // Activates the chess logic
-    if (!user_config.free) {
+    if (user_config.free) {
+      this.cg.set({
+        movable: {
+          free: true,
+          events: {
+            after: this.save_move,
+          },
+        },
+      });
+    } else {
       this.cg.set({
         movable: {
           free: false,
           dests: this.dests(),
           events: {
-            after: this.refresh_moves(),
+            after: this.refresh_moves,
           },
         },
       });
+    }
+
+    if (user_config.shapes) {
+      this.cg.setShapes(user_config.shapes);
     }
   }
 
@@ -126,17 +169,81 @@ export class Chesser {
     return this.chess.in_check();
   }
 
-  refresh_moves() {
-    return (orig: any, dest: any) => {
-      this.chess.move({ from: orig, to: dest });
-      this.cg.set({
-        check: this.check(),
-        turnColor: this.color_turn(),
-        movable: {
-          color: this.color_turn(),
-          dests: this.dests(),
-        },
+  get_section_range(view: MarkdownView): [EditorPosition, EditorPosition] {
+    const sectionInfo = this.ctx.getSectionInfo(this.containerEl);
+    return [
+      {
+        line: sectionInfo.lineStart + 1,
+        ch: 0,
+      },
+      {
+        line: sectionInfo.lineEnd,
+        ch: 0,
+      },
+    ];
+  }
+
+  get_config(view: MarkdownView): ChesserConfig | undefined {
+    const [from, to] = this.get_section_range(view);
+    const codeblockText = view.editor.getRange(from, to);
+    try {
+      return parseYaml(codeblockText);
+    } catch (e) {
+      // failed to parse. show error...
+    }
+
+    return undefined;
+  }
+
+  save_move() {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!view) {
+      throw new Error("Failed to retrieve view");
+    }
+    const sectionInfo = this.ctx.getSectionInfo(this.containerEl);
+    try {
+      const updated = stringifyYaml({
+        ...this.get_config(view),
+        pgn: this.chess.pgn(),
       });
-    };
+
+      const [from, to] = this.get_section_range(view);
+      view.editor.replaceRange(updated, from, to);
+    } catch (e) {
+      // failed to parse. show error...
+    }
+  }
+
+  save_shapes(shapes: DrawShape[]) {
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!view) {
+      throw new Error("Failed to retrieve view");
+    }
+
+    try {
+      const updated = stringifyYaml({
+        ...this.get_config(view),
+        shapes,
+      });
+
+      const [from, to] = this.get_section_range(view);
+      view.editor.replaceRange(updated, from, to);
+    } catch (e) {
+      // failed to parse. show error...
+    }
+  }
+
+  refresh_moves(orig: any, dest: any) {
+    this.chess.move({ from: orig, to: dest });
+    this.cg.set({
+      check: this.check(),
+      turnColor: this.color_turn(),
+      movable: {
+        color: this.color_turn(),
+        dests: this.dests(),
+      },
+    });
+
+    this.save_move();
   }
 }
