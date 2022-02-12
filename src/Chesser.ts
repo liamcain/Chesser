@@ -1,6 +1,3 @@
-import { ChesserConfig, parse_user_config } from "./ChesserConfig";
-import { ChesserSettings } from "./ChesserSettings";
-
 import {
   App,
   EditorPosition,
@@ -11,10 +8,15 @@ import {
   parseYaml,
   stringifyYaml,
 } from "obsidian";
-import { Chess, ChessInstance } from "chess.js";
+import { Chess, ChessInstance, Square } from "chess.js";
 import { Chessground } from "chessground";
 import { Api } from "chessground/api";
 import { Color, Key } from "chessground/types";
+import { DrawShape } from "chessground/draw";
+
+import { ChesserConfig, parse_user_config } from "./ChesserConfig";
+import { ChesserSettings } from "./ChesserSettings";
+import { createMenu } from "./menu";
 
 // To bundle all css files in styles.css with rollup
 import "../assets/custom.css";
@@ -55,7 +57,7 @@ import "../assets/board-css/blue.css";
 import "../assets/board-css/green.css";
 import "../assets/board-css/purple.css";
 import "../assets/board-css/ic.css";
-import { DrawShape } from "chessground/draw";
+import { Config } from "chessground/config";
 
 export function draw_chessboard(app: App, settings: ChesserSettings) {
   return (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
@@ -81,56 +83,60 @@ export class Chesser extends MarkdownRenderChild {
 
     this.app = app;
     this.ctx = ctx;
-    this.refresh_moves = this.refresh_moves.bind(this);
+    this.sync_board_with_gamestate = this.sync_board_with_gamestate.bind(this);
     this.save_move = this.save_move.bind(this);
     this.save_shapes = this.save_shapes.bind(this);
 
-    let div = this.set_style(containerEl, user_config.pieceStyle, user_config.boardStyle);
-
     this.chess = new Chess();
-
     if (user_config.pgn) {
       this.chess.load_pgn(user_config.pgn, { sloppy: true });
     } else if (user_config.fen) {
       this.chess.load(user_config.fen);
     }
 
-    const cg_config = {
-      fen: this.chess.fen(),
-      pgn: user_config.pgn,
-      orientation: user_config.orientation as Color,
-      viewOnly: user_config.viewOnly,
-      drawable: {
-        enabled: user_config.drawable,
-        onChange: this.save_shapes,
-      },
-    };
-
+    // const history = this.chess.history({ verbose: true });
+    // const lastMove = history.length > 0 ? history[history.length - 1] : undefined;
+    this.set_style(containerEl, user_config.pieceStyle, user_config.boardStyle);
     try {
-      this.cg = Chessground(div, cg_config);
+      this.cg = Chessground(containerEl.createDiv(), {
+        fen: this.chess.fen(),
+        addDimensionsCssVars: true,
+        orientation: user_config.orientation as Color,
+        viewOnly: user_config.viewOnly,
+        drawable: {
+          enabled: user_config.drawable,
+          onChange: this.save_shapes,
+        },
+      });
     } catch (e) {
       new Notice("Chesser error: Invalid config");
+      console.error(e);
       return;
     }
+
+    createMenu(containerEl, this);
 
     // Activates the chess logic
     if (user_config.free) {
       this.cg.set({
+        events: {
+          move: this.save_move,
+        },
         movable: {
           free: true,
-          events: {
-            after: this.save_move,
-          },
         },
       });
     } else {
       this.cg.set({
+        events: {
+          move: (orig: any, dest: any) => {
+            this.chess.move({ from: orig, to: dest });
+            this.sync_board_with_gamestate();
+          },
+        },
         movable: {
           free: false,
           dests: this.dests(),
-          events: {
-            after: this.refresh_moves,
-          },
         },
       });
     }
@@ -141,11 +147,7 @@ export class Chesser extends MarkdownRenderChild {
   }
 
   set_style(el: HTMLElement, pieceStyle: string, boardStyle: string) {
-    let div = document.createElement("div");
-    el.addClass(pieceStyle);
-    el.addClass(`${boardStyle}-board`);
-    el.appendChild(div);
-    return div;
+    el.addClasses([pieceStyle, `${boardStyle}-board`, "chesser-container"]);
   }
 
   color_turn(): Color {
@@ -200,7 +202,6 @@ export class Chesser extends MarkdownRenderChild {
     if (!view) {
       throw new Error("Failed to retrieve view");
     }
-    const sectionInfo = this.ctx.getSectionInfo(this.containerEl);
     try {
       const updated = stringifyYaml({
         ...this.get_config(view),
@@ -233,8 +234,7 @@ export class Chesser extends MarkdownRenderChild {
     }
   }
 
-  refresh_moves(orig: any, dest: any) {
-    this.chess.move({ from: orig, to: dest });
+  sync_board_with_gamestate() {
     this.cg.set({
       check: this.check(),
       turnColor: this.color_turn(),
@@ -245,5 +245,46 @@ export class Chesser extends MarkdownRenderChild {
     });
 
     this.save_move();
+  }
+
+  public undo_move() {
+    console.log("BEFORE: ", this.chess.fen());
+    if (this.history().length === 0) {
+      return;
+    }
+
+    this.chess.undo();
+    console.log("AFTER: ", this.chess.fen());
+    this.cg.set({ fen: this.chess.fen() });
+    // this.sync_board_with_gamestate();
+  }
+
+  public setFreeMove(enabled: boolean): void {
+    if (enabled) {
+      this.cg.set({
+        movable: {
+          free: true,
+          dests: undefined,
+        },
+      });
+    } else {
+      this.sync_board_with_gamestate();
+    }
+  }
+
+  public turn() {
+    return this.chess.turn();
+  }
+
+  public history() {
+    return this.chess.history({ verbose: true });
+  }
+
+  public flipBoard() {
+    return this.cg.toggleOrientation();
+  }
+
+  public getBoardState() {
+    return this.cg.state;
   }
 }

@@ -82,10 +82,10 @@
     estree-walker "^1.0.1"
     picomatch "^2.2.2"
 
-"@types/chess.js@^0.10.1":
-  version "0.10.1"
-  resolved "https://registry.yarnpkg.com/@types/chess.js/-/chess.js-0.10.1.tgz#441f0c379ef6d37e3991dcbf3d5db00b44fdb891"
-  integrity sha512-cuFMyrUYOWpKm5PRayvk22jLV3BOuWs7iJ7Q4PZJXMWoF7uhjWEojMS4GPk441gn4Ki9BHxbKsll7mrwJ3KT3g==
+"@types/chess.js@^0.11.2":
+  version "0.11.2"
+  resolved "https://registry.yarnpkg.com/@types/chess.js/-/chess.js-0.11.2.tgz#e5d5f502b38f24efe854572ee33a939e1e395005"
+  integrity sha512-ZgT0f5Dm1x+kjA/RhCQpBM2NoUGkdk9JFdwncW7/GdqzHCOkLsOTq4k/EKRiRTCFLXR4fTKk8j7KNOmzzHQVgg==
 
 "@types/codemirror@0.0.108":
   version "0.0.108"
@@ -146,15 +146,15 @@ builtin-modules@^3.1.0:
   resolved "https://registry.yarnpkg.com/builtin-modules/-/builtin-modules-3.2.0.tgz#45d5db99e7ee5e6bc4f362e008bf917ab5049887"
   integrity sha512-lGzLKcioL90C7wMczpkY0n/oART3MbBa8R9OFGE1rJxoVI86u4WAGfEk8Wjv10eKSyTHVGkSo3bvBylCEtk7LA==
 
-chess.js@^0.11.0:
-  version "0.11.0"
-  resolved "https://registry.yarnpkg.com/chess.js/-/chess.js-0.11.0.tgz#e1802179b944eab5daf11b5d4bce08cdcadbeffa"
-  integrity sha512-yTpi6XbRMkBtnjSvbt6wEp9Y7JzhJl1MC3GNn67q5ClyccXxCRf5cMPSUg4OblrUapg1kLHm7WzxxEVp20NK1Q==
+chess.js@^0.12.0:
+  version "0.12.0"
+  resolved "https://registry.yarnpkg.com/chess.js/-/chess.js-0.12.0.tgz#ffca1773b93a4aa044891de81286e264ca229b00"
+  integrity sha512-eF1xf4j88r/AwIRxqV1FXZbVgMt4yUx05xrL+ZMqUrY+snFrUxGVHs0VgEd3AvngujDE9th7XZqqCwEKEQ7mWQ==
 
-chessground@^7.11.0:
-  version "7.12.0"
-  resolved "https://registry.yarnpkg.com/chessground/-/chessground-7.12.0.tgz#92d9726afc9d019c04ded83997c6ba2e6f8f93ff"
-  integrity sha512-MQG7c4Hsy1dCkMFFv4LTaRauVSmWF8/dukion1qLCh5pIcKyoa5onbmbglAdDXOYhBbAZVf1F289wy0DeDEBJQ==
+chessground@^8.1.9:
+  version "8.1.9"
+  resolved "https://registry.yarnpkg.com/chessground/-/chessground-8.1.9.tgz#92e0c8113ca8cd45adf8a2a68c839fbc8cc5d5a8"
+  integrity sha512-IZSgOzNtQFE1YNAwtYJYqHwIY/+fHK5ZLhg6qq0nLM/580S1A3hcinfz7mxDwMMeIkcnM4n11IOQfrco9fcJIg==
 
 commondir@^1.0.1:
   version "1.0.1"
@@ -266,9 +266,10 @@ moment@2.29.1:
   resolved "https://registry.yarnpkg.com/moment/-/moment-2.29.1.tgz#b2be769fa31940be9eeea6469c075e35006fa3d3"
   integrity sha512-kHmoybcPV8Sqy59DwNDY3Jefr64lK/by/da0ViFcuA4DH0vQg5Q6Ze5VimxkfQNSC+Mls/Kx53s7TjP1RhFEDQ==
 
-"obsidian@https://github.com/obsidianmd/obsidian-api/tarball/master":
+obsidian@0.13.11:
   version "0.13.11"
-  resolved "https://github.com/obsidianmd/obsidian-api/tarball/master#8c89989982a6671e81b7694622e1477aadaa54d9"
+  resolved "https://registry.yarnpkg.com/obsidian/-/obsidian-0.13.11.tgz#5f2356d21d211f4922d2c796c47b919b2cee0317"
+  integrity sha512-KxOvAh4CG5vzcukmHvyuK9hUIr6ZFlM9FQfGZEwrrEV8VG2/W2Tk5cWrg0VM7EkGE3QBmjX6owjIDIO8QDXVUQ==
   dependencies:
     "@codemirror/state" "^0.19.6"
     "@codemirror/view" "^0.19.31"

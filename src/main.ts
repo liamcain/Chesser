@@ -1,4 +1,4 @@
-import { Plugin } from "obsidian";
+import { MarkdownView, Plugin } from "obsidian";
 import { draw_chessboard } from "./Chesser";
 import { ChesserSettings, ChesserSettingTab, DEFAULT_SETTINGS } from "./ChesserSettings";
 
@@ -12,7 +12,6 @@ export default class ChesserPlugin extends Plugin {
       "chess",
       draw_chessboard(this.app, this.settings)
     );
-    //     this.registerMarkdownCodeBlockProcessor("chesser", draw_chessboard(this.settings));
   }
 
   async loadSettings() {
