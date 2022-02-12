@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "chess.js": "^0.12.0",
-    "chessground": "^8.1.9"
+    "chessground": "^8.1.9",
+    "nanoid": "^3.2.0"
   }
 }

@@ -37,7 +37,7 @@ function createToolbar(containerEl: HTMLElement, chesser: Chesser) {
     setIcon(btn, "right-arrow");
     btn.addEventListener("click", (e: MouseEvent) => {
       e.preventDefault();
-      chesser.undo_move();
+      chesser.redo_move();
     });
   });
 
@@ -52,7 +52,7 @@ function createToolbar(containerEl: HTMLElement, chesser: Chesser) {
 }
 
 export function createMenu(parentEl: HTMLElement, chesser: Chesser) {
-  parentEl.createDiv("chess-menu-container", (containerEl) => {
+  return parentEl.createDiv("chess-menu-container", (containerEl) => {
     containerEl;
     containerEl.createDiv({ cls: "chess-menu-section" }, (sectionEl) => {
       sectionEl.createEl(
@@ -89,8 +89,13 @@ export function createMenu(parentEl: HTMLElement, chesser: Chesser) {
           cls: "chess-turn-text",
         });
         sectionEl.createDiv("chess-move-list", (moveListEl) => {
-          chesser.history().forEach((move) => {
-            moveListEl.createDiv({ cls: "chess-move", text: move.san });
+          chesser.history().forEach((move, idx) => {
+            moveListEl.createDiv({
+              cls: `chess-move ${
+                chesser.currentMoveIdx === idx ? "chess-move-active" : ""
+              }`,
+              text: move.san,
+            });
           });
         });
       }

@@ -43,6 +43,11 @@
   width: 50%;
 }
 
+.chess-move-active {
+  color: var(--text-normal);
+  font-weight: 500;
+}
+
 .chess-menu-section {
   border-top: 1px solid var(--background-modifier-border);
   padding: 16px 0;
