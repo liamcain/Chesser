@@ -14,13 +14,10 @@ export default class ChesserMenu {
     this.containerEl = parentEl.createDiv("chess-menu-container", (containerEl) => {
       containerEl;
       containerEl.createDiv({ cls: "chess-menu-section" }, (sectionEl) => {
-        const startingPosition = this.getStartingPositionFromFen(chesser.getFen());
-        const startingPositionName = startingPosition ? startingPosition.eco : "custom";
         const selectEl = sectionEl.createEl(
           "select",
           {
             cls: "dropdown chess-starting-position-dropdown",
-            value: startingPositionName,
           },
           (el) => {
             el.createEl("option", {
@@ -42,6 +39,11 @@ export default class ChesserMenu {
                 });
               });
             });
+            const startingPosition = this.getStartingPositionFromFen(chesser.getFen());
+            const startingPositionName = startingPosition
+              ? startingPosition.eco
+              : "custom";
+            el.value = startingPositionName;
           }
         );
 
