@@ -19,7 +19,9 @@
 }
 
 .chess-toolbar-container {
-  margin: 0.6em 0;
+  border-top: 1px solid var(--background-modifier-border);
+  margin-top: auto;
+  padding-top: 12px;
 }
 
 .chess-turn-text {
@@ -39,7 +41,9 @@
 
 .chess-move {
   color: var(--text-muted);
+  cursor: pointer;
   font-size: 80%;
+  padding: 4px;
   width: 50%;
 }
 
@@ -51,10 +55,6 @@
 .chess-menu-section {
   border-top: 1px solid var(--background-modifier-border);
   padding: 16px 0;
-}
-
-.chess-menu-section-tall {
-  flex-grow: 1;
 }
 
 .chess-starting-position-dropdown {

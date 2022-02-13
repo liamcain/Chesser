@@ -8,6 +8,7 @@ export interface ChesserConfig extends ChesserSettings {
   pgn?: string;
   shapes?: any;
   currentMoveIdx?: number;
+  moves?: string[];
 }
 
 const ORIENTATIONS = ["white", "black"];

@@ -16,8 +16,8 @@ import { Color, Key } from "chessground/types";
 import { DrawShape } from "chessground/draw";
 
 import { ChesserConfig, parse_user_config } from "./ChesserConfig";
-import { ChesserSettings, DEFAULT_SETTINGS } from "./ChesserSettings";
-import { createMenu } from "./menu";
+import { ChesserSettings } from "./ChesserSettings";
+import ChesserMenu from "./menu";
 
 // To bundle all css files in styles.css with rollup
 import "../assets/custom.css";
@@ -58,6 +58,7 @@ import "../assets/board-css/blue.css";
 import "../assets/board-css/green.css";
 import "../assets/board-css/purple.css";
 import "../assets/board-css/ic.css";
+import debug from "./debug";
 
 export function draw_chessboard(app: App, settings: ChesserSettings) {
   return (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
@@ -70,9 +71,10 @@ function read_state(id: string) {
   const savedDataStr = localStorage.getItem(`chesser-${id}`);
   try {
     return JSON.parse(savedDataStr);
-  } catch (err) {
-    console.error(err);
+  } catch (e) {
+    console.error(e);
   }
+  return {};
 }
 
 function write_state(id: string, game_state: ChesserConfig) {
@@ -87,7 +89,7 @@ export class Chesser extends MarkdownRenderChild {
   private cg: Api;
   private chess: ChessInstance;
 
-  private menu: HTMLElement;
+  private menu: ChesserMenu;
   private moves: Move[];
 
   public currentMoveIdx: number;
@@ -103,6 +105,7 @@ export class Chesser extends MarkdownRenderChild {
     this.app = app;
     this.ctx = ctx;
     this.id = user_config.id ?? nanoid(8);
+    this.chess = new Chess();
 
     const saved_config = read_state(this.id);
     const config = Object.assign({}, user_config, saved_config);
@@ -114,22 +117,36 @@ export class Chesser extends MarkdownRenderChild {
     // Save `id` into the codeblock yaml
     if (user_config.id === undefined) {
       this.app.workspace.onLayoutReady(() => {
-        this.write_config({ id: this.id });
+        window.setImmediate(() => {
+          this.write_config({ id: this.id });
+        });
       });
     }
 
-    this.chess = new Chess();
     if (config.pgn) {
-      this.chess.load_pgn(config.pgn, { sloppy: true });
+      debug(() => console.debug("loading from pgn", config.pgn));
+      this.chess.load_pgn(config.pgn);
     } else if (config.fen) {
+      debug(() => console.debug("loading from fen", config.fen));
       this.chess.load(config.fen);
     }
 
+    this.moves = config.moves ?? this.chess.history({ verbose: true });
+    this.currentMoveIdx = config.currentMoveIdx ?? this.moves.length - 1;
+
+    let lastMove: [Key, Key] = undefined;
+    if (this.currentMoveIdx >= 0) {
+      const move = this.moves[this.currentMoveIdx];
+      lastMove = [move.from, move.to];
+    }
+
+    // Setup UI
     this.set_style(containerEl, config.pieceStyle, config.boardStyle);
     try {
       this.cg = Chessground(containerEl.createDiv(), {
         fen: this.chess.fen(),
         addDimensionsCssVars: true,
+        lastMove,
         orientation: config.orientation as Color,
         viewOnly: config.viewOnly,
         drawable: {
@@ -143,44 +160,110 @@ export class Chesser extends MarkdownRenderChild {
       return;
     }
 
-    this.moves = this.chess.history({ verbose: true });
-    this.currentMoveIdx = user_config.currentMoveIdx ?? this.moves.length - 1;
-
     // Activates the chess logic
-    if (config.free) {
-      this.cg.set({
-        events: {
-          move: this.save_move,
-        },
-        movable: {
-          free: true,
-        },
-      });
-    } else {
-      this.cg.set({
-        events: {
-          move: (orig: any, dest: any) => {
-            const move = this.chess.move({ from: orig, to: dest });
-            this.moves.push(move);
-            this.sync_board_with_gamestate();
-          },
-        },
-        movable: {
-          free: false,
-          dests: this.dests(),
-        },
+    this.setFreeMove(config.free);
+
+    // Draw saved shapes
+    if (config.shapes) {
+      this.app.workspace.onLayoutReady(() => {
+        window.setTimeout(() => {
+          this.sync_board_with_gamestate(false);
+          this.cg.setShapes(config.shapes);
+        }, 100);
       });
     }
 
-    if (user_config.shapes) {
-      this.cg.setShapes(user_config.shapes);
-    }
-
-    this.menu = createMenu(containerEl, this);
+    this.menu = new ChesserMenu(containerEl, this);
   }
 
   private set_style(el: HTMLElement, pieceStyle: string, boardStyle: string) {
     el.addClasses([pieceStyle, `${boardStyle}-board`, "chesser-container"]);
+  }
+
+  private get_section_range(): [EditorPosition, EditorPosition] {
+    const sectionInfo = this.ctx.getSectionInfo(this.containerEl);
+
+    return [
+      {
+        line: sectionInfo.lineStart + 1,
+        ch: 0,
+      },
+      {
+        line: sectionInfo.lineEnd,
+        ch: 0,
+      },
+    ];
+  }
+
+  private get_config(view: MarkdownView): ChesserConfig | undefined {
+    const [from, to] = this.get_section_range();
+    const codeblockText = view.editor.getRange(from, to);
+    try {
+      return parseYaml(codeblockText);
+    } catch (e) {
+      debug(() =>
+        console.debug("failed to parse codeblock's yaml config", codeblockText)
+      );
+      // failed to parse. show error...
+    }
+
+    return undefined;
+  }
+
+  private write_config(config: Partial<ChesserConfig>) {
+    debug(() => console.debug("writing config to localStorage", config));
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!view) {
+      new Notice("Chesser: Failed to retrieve active view");
+      console.error("Chesser: Failed to retrieve view when writing config");
+    }
+    try {
+      const updated = stringifyYaml({
+        ...this.get_config(view),
+        ...config,
+      });
+
+      const [from, to] = this.get_section_range();
+      view.editor.replaceRange(updated, from, to);
+    } catch (e) {
+      // failed to parse. show error...
+      console.error("failed to write config", e);
+    }
+  }
+
+  private save_move() {
+    const config = read_state(this.id);
+    write_state(this.id, {
+      ...config,
+      currentMoveIdx: this.currentMoveIdx,
+      moves: this.moves,
+      pgn: this.chess.pgn(),
+    });
+  }
+
+  private save_shapes(shapes: DrawShape[]) {
+    const config = read_state(this.id);
+    write_state(this.id, {
+      ...config,
+      shapes,
+    });
+  }
+
+  private sync_board_with_gamestate(shouldSave: boolean = true) {
+    this.cg.set({
+      check: this.check(),
+      turnColor: this.color_turn(),
+      movable: {
+        free: false,
+        color: this.color_turn(),
+        dests: this.dests(),
+      },
+    });
+
+    this.menu?.redrawMoveList();
+    if (shouldSave) {
+      this.save_move();
+    }
   }
 
   public color_turn(): Color {
@@ -204,129 +287,69 @@ export class Chesser extends MarkdownRenderChild {
     return this.chess.in_check();
   }
 
-  private get_section_range(view: MarkdownView): [EditorPosition, EditorPosition] {
-    const sectionInfo = this.ctx.getSectionInfo(this.containerEl);
-    console.log("this.ctx", sectionInfo);
-
-    if (sectionInfo.lineStart) {
-      return [
-        {
-          line: sectionInfo.lineStart + 1,
-          ch: 0,
-        },
-        {
-          line: sectionInfo.lineEnd,
-          ch: 0,
-        },
-      ];
-    }
-
-    return [
-      {
-        line: sectionInfo.lineStart + 1,
-        ch: 0,
-      },
-      {
-        line: sectionInfo.lineEnd,
-        ch: 0,
-      },
-    ];
-  }
-
-  private get_config(view: MarkdownView): ChesserConfig | undefined {
-    const [from, to] = this.get_section_range(view);
-    const codeblockText = view.editor.getRange(from, to);
-    try {
-      return parseYaml(codeblockText);
-    } catch (e) {
-      // failed to parse. show error...
-    }
-
-    return undefined;
-  }
-
-  private write_config(config: Partial<ChesserConfig>) {
-    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (!view) {
-      throw new Error("Failed to retrieve view");
-    }
-    try {
-      const updated = stringifyYaml({
-        ...this.get_config(view),
-        ...config,
-      });
-
-      const [from, to] = this.get_section_range(view);
-      view.editor.replaceRange(updated, from, to);
-    } catch (e) {
-      // failed to parse. show error...
-    }
-  }
-
-  private save_move() {
-    const config = read_state(this.id);
-    write_state(this.id, {
-      ...config,
-      pgn: this.chess.pgn(),
-    });
-  }
-
-  private save_shapes(shapes: DrawShape[]) {
-    const config = read_state(this.id);
-    write_state(this.id, {
-      ...config,
-      shapes,
-    });
-  }
-
-  private sync_board_with_gamestate() {
-    this.cg.set({
-      check: this.check(),
-      turnColor: this.color_turn(),
-      movable: {
-        color: this.color_turn(),
-        dests: this.dests(),
-      },
-    });
-
-    this.menu.detach();
-    this.menu = createMenu(this.containerEl, this);
-    this.save_move();
-  }
-
   public undo_move() {
-    if (this.currentMoveIdx === 0) {
-      return;
-    }
-
-    this.currentMoveIdx--;
-    this.chess.undo();
-    this.cg.set({ fen: this.chess.fen() });
-    this.sync_board_with_gamestate();
+    this.update_turn_idx(this.currentMoveIdx - 1);
   }
 
   public redo_move() {
-    if (this.currentMoveIdx === this.moves.length - 1) {
+    this.update_turn_idx(this.currentMoveIdx + 1);
+  }
+
+  public update_turn_idx(moveIdx: number): void {
+    if (moveIdx < -1 || moveIdx >= this.moves.length) {
       return;
     }
 
-    this.currentMoveIdx++;
-    const move = this.moves[this.currentMoveIdx];
-    this.chess.move(move);
+    const isUndoing = moveIdx < this.currentMoveIdx;
+    if (isUndoing) {
+      while (this.currentMoveIdx > moveIdx) {
+        this.currentMoveIdx--;
+        this.chess.undo();
+      }
+    } else {
+      while (this.currentMoveIdx < moveIdx) {
+        this.currentMoveIdx++;
+        const move = this.moves[this.currentMoveIdx];
+        this.chess.move(move);
+      }
+    }
 
-    this.cg.set({ fen: this.chess.fen() });
+    let lastMove: [Key, Key] = undefined;
+    if (this.currentMoveIdx >= 0) {
+      const move = this.moves[this.currentMoveIdx];
+      lastMove = [move.from, move.to];
+    }
+
+    this.cg.set({
+      fen: this.chess.fen(),
+      lastMove,
+    });
     this.sync_board_with_gamestate();
   }
 
   public setFreeMove(enabled: boolean): void {
     if (enabled) {
       this.cg.set({
+        events: {
+          move: this.save_move,
+        },
         movable: {
           free: true,
+          color: "both",
           dests: undefined,
         },
       });
     } else {
+      this.cg.set({
+        events: {
+          move: (orig: any, dest: any) => {
+            const move = this.chess.move({ from: orig, to: dest });
+            this.currentMoveIdx++;
+            this.moves = [...this.moves.slice(0, this.currentMoveIdx), move];
+            this.sync_board_with_gamestate();
+          },
+        },
+      });
       this.sync_board_with_gamestate();
     }
   }
@@ -345,5 +368,36 @@ export class Chesser extends MarkdownRenderChild {
 
   public getBoardState() {
     return this.cg.state;
+  }
+
+  public getFen() {
+    return this.chess.fen();
+  }
+
+  public loadFen(fen: string, moves?: string[]): void {
+    let lastMove: [Key, Key] = undefined;
+    if (moves) {
+      this.currentMoveIdx = -1;
+      this.moves = [];
+      this.chess.reset();
+
+      moves.forEach((fullMove) => {
+        fullMove.split(" ").forEach((halfMove) => {
+          const move = this.chess.move(halfMove);
+          this.moves.push(move);
+          this.currentMoveIdx++;
+        });
+      });
+
+      if (this.currentMoveIdx >= 0) {
+        const move = this.moves[this.currentMoveIdx];
+        lastMove = [move.from, move.to];
+      }
+    } else {
+      this.chess.load(fen);
+    }
+
+    this.cg.set({ fen: this.chess.fen(), lastMove });
+    this.sync_board_with_gamestate();
   }
 }
